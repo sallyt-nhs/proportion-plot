@@ -7,10 +7,13 @@ library(here)
 library(openxlsx)
 library(tibble)
 library(tidyr)
+library(here)
+library(ggrepel)
+library(stringr)
 
 
 # load data
-demo_data <- read.xlsx("prop plot demo data.xlsx",
+demo_data <- read.xlsx(here("Data", "prop plot demo data.xlsx"),
                        colNames = TRUE, rowNames = TRUE)
 
 
@@ -51,47 +54,22 @@ plot_data <- step_data %>%
                names_to = "quintile",
                values_to = "proportion")
 
-# plot_end <- plot_data %>% 
-#   mutate()
 
-## first attempt
-ggplot(plot_data, aes(x = step, y = proportion, fill = quintile)) +
-  geom_area(colour = "dark grey", size = 0.8) +
 
-#  geom_area(data = ~filter(.x, step %in% c(1, 13)), colour = "dark grey", size = 0.8) +
-  
- #  labs(
- #    # title = "title",
- #    # subtitle = "subtitle",
- #    x = "",
- # #   y = ""
- #  ) +
-  
-  theme_minimal() +   
 
-  theme(axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank()) +
-  
-  scale_fill_brewer(palette="RdYlBu")
-  
-
-## second attempt - adjust data to zero for middle steps
-# doesn't work as pulls end bars down to x-axis
-
-# change second layer to bar? throws error with stat_count
+# change second layer to bar? 
 
 `%!in%` <- Negate(`%in%`)
 
-ggplot(NULL) +
-  geom_area(data = plot_data, aes(x = step, y = proportion, fill = quintile),
+plot_data %>%  ggplot(aes(x = step, fill = quintile)) + 
+  geom_area(aes(y = proportion),
            alpha = 0.4
             ) +
   
     geom_bar(data = plot_data %>% mutate(proportion = case_when(step %!in% c(1, 13) ~ 0, TRUE ~ proportion)),
              aes(x = step, y = proportion, fill = quintile),
              position = "stack", stat = "identity",
-             width = 1.7
+             width = 1.9
              ) +
   
   #  labs(
@@ -100,6 +78,27 @@ ggplot(NULL) +
   #    x = "",
   # #   y = ""
   #  ) +
+  
+  # percent labels
+  geom_text(data = plot_data %>% filter(step %in% (c(1, 13))),
+    aes(y = proportion, label = scales::percent(proportion)),
+    position = position_stack(vjust = 0.5),
+    size = 5,
+    fontface = "bold",
+    colour = c("white", "grey40", "grey40", "grey40", "white", "white", "grey40", "grey40", "grey40", "white")
+  ) +
+  # Group labels
+  geom_text_repel(
+    data = filter(plot_data, step == 1),
+    aes(y = proportion, label= quintile),
+    position = position_stack(vjust = 0.5),
+    direction = "x",
+     xlim = c(-8, 0),
+    segment.colour = NA,
+    size = 5,
+    fontface = "bold",
+    colour = "black"
+  ) +
   
   theme_void() +   
   
