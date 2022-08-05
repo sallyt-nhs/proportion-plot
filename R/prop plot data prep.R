@@ -12,28 +12,34 @@ library(ggrepel)
 library(stringr)
 
 
+
 # load data
 demo_data <- read.xlsx(here("Data", "prop plot demo data.xlsx"),
                        colNames = TRUE, rowNames = TRUE)
 
 
-
+# calculate difference between left hand side and right hand side, for creating
+# intermediate values for area plot
 step_data <- demo_data %>% 
   mutate(l_r_diff = lhs - rhs) 
 
-step_mult <- c(0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
+# the width of the plot is dependent on the number of intermediate steps. Enter 
+# an integer - the higher the number the wider the plot (shallower gradient joining the ends)
+width_num <- 5
 
-# step_data <- as_tibble(matrix(nrow = nrow(demo_data), ncol = 0))
+# creates intermediate steps for the area plot
+step_mult <- seq(0, 1, length = width_num)
 
-for (i in 1:11) {
+# generates values for the intermediate steps
+for (i in 1:width_num) {
   
-#  browser()
   new_col_name <- as.name(paste0("step_", i-1))
   
   step_data[[new_col_name]] <-  step_data$lhs - (step_mult[i] * step_data$l_r_diff)
   
   }
 
+## tidies up the data and preps it to a long format for plotting
 plot_data <- step_data %>% 
   select(-l_r_diff) %>% 
   relocate(end = rhs, .after = last_col()) %>% 
@@ -43,34 +49,69 @@ plot_data <- step_data %>%
   t(.) %>% 
   as.data.frame() %>% 
   mutate(step = row_number()) %>% 
-  # rownames_to_column(., "step") %>% 
-  # mutate(step = factor(step, ordered = TRUE,
-  #                      levels = c("start", "step_0", "step_1", "step_2", "step_3", "step_4", "step_5",
-  #                                 "step_6", "step_7", "step_8", "step_9", "step_10", "end" ))) %>% 
-  
+
   # make long for plotting
   pivot_longer(., 
                "Q1 - most": "Q5 - least",
                names_to = "quintile",
-               values_to = "proportion")
+               values_to = "proportion") %>% 
+  mutate(quintile_label = case_when(quintile == "Q1 - most" ~ "Most deprived 20%",
+                                    quintile == "Q5 - least" ~ "Least deprived 20%",
+                                    TRUE ~ ""))
 
 
-
-
-# change second layer to bar? 
-
-`%!in%` <- Negate(`%in%`)
-
-plot_data %>%  ggplot(aes(x = step, fill = quintile)) + 
+# generate plot
+plot_data %>%  
+  ggplot(aes(x = step, fill = quintile)) + 
+  
   geom_area(aes(y = proportion),
            alpha = 0.4
             ) +
+ 
+  # only want to plot the first and last steps in the bar chart 
+  geom_bar(data = filter(plot_data, step %in% c(1, max(step))),
+           aes(x = step, y = proportion, fill = quintile),
+           position = "stack", stat = "identity",
+           width = 1.9
+  ) +
   
-    geom_bar(data = plot_data %>% mutate(proportion = case_when(step %!in% c(1, 13) ~ 0, TRUE ~ proportion)),
-             aes(x = step, y = proportion, fill = quintile),
-             position = "stack", stat = "identity",
-             width = 1.9
-             ) +
+  # percent labels
+    geom_text(
+      # only want labels for first and last step
+      data = filter(plot_data, step %in% c(1, max(step))),
+      aes(y = proportion, label = scales::percent(proportion)),
+      # centre labels in middle of bars
+      position = position_stack(vjust = 0.5),
+      size = 5,
+      fontface = "bold",
+      colour = c("white", "grey40", "grey40", "grey40", "white",
+                 "white", "grey40","grey40", "grey40", "white")
+    ) +
+  
+  # Group labels
+  geom_text_repel(
+    # only want labels for the left hand side (first step)
+    data = filter(plot_data, step == 1),
+    aes(y = proportion, label= quintile_label),
+    position = position_stack(vjust = 0.5),
+    direction = "x",
+    xlim = c(-5, 0),
+    segment.colour = NA,
+    size = 5,
+    fontface = "bold",
+    colour = "black"
+  ) +
+  
+  scale_x_continuous(
+    breaks = c(0, max(plot_data$step)),
+    labels = c("Population", "Cohort"),
+    position = "top",
+    expand = expansion(mult = 0.4),
+    expand_limits(x = -10)
+    ) +
+  
+  scale_fill_brewer(palette="RdYlBu") +
+  
   
   #  labs(
   #    # title = "title",
@@ -79,34 +120,12 @@ plot_data %>%  ggplot(aes(x = step, fill = quintile)) +
   # #   y = ""
   #  ) +
   
-  # percent labels
-  geom_text(data = plot_data %>% filter(step %in% (c(1, 13))),
-    aes(y = proportion, label = scales::percent(proportion)),
-    position = position_stack(vjust = 0.5),
-    size = 5,
-    fontface = "bold",
-    colour = c("white", "grey40", "grey40", "grey40", "white", "white", "grey40", "grey40", "grey40", "white")
-  ) +
-  # Group labels
-  geom_text_repel(
-    data = filter(plot_data, step == 1),
-    aes(y = proportion, label= quintile),
-    position = position_stack(vjust = 0.5),
-    direction = "x",
-     xlim = c(-8, 0),
-    segment.colour = NA,
-    size = 5,
-    fontface = "bold",
-    colour = "black"
-  ) +
-  
-  theme_void() +   
-  
-  theme(axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank()) +
-  
-  scale_fill_brewer(palette="RdYlBu")
+theme_void() +
+
+ theme(# axis.title.x=element_blank(),
+#     axis.text.x=element_blank(),
+ #     axis.ticks.x=element_blank(),
+      legend.position = "none")
 
 
 
